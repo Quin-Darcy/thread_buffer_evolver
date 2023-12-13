@@ -1,0 +1,6 @@
+Range: 100001-1000000, Threads: 0, Buffer Size: 0, Fitness: 0
+Range: 1001-10000, Threads: 1, Buffer Size: 2450, Fitness: 1125.0899397245325
+Range: 1-1000, Threads: 0, Buffer Size: 53, Fitness: inf
+Range: 10000001-1000000000, Threads: 0, Buffer Size: 0, Fitness: 0
+Range: 10001-100000, Threads: 1, Buffer Size: 10651, Fitness: 1008.4378157097043
+Range: 1000001-10000000, Threads: 3, Buffer Size: 16125, Fitness: 301.50470795460905

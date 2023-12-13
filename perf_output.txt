@@ -1,0 +1,14 @@
+
+ Performance counter stats for './entropy 3 4096 test_files/file_01.pdf':
+
+            10,878      cache-misses:u                   #   34.159 % of all cache refs       
+            31,845      cache-references:u                                                    
+           872,268      instructions:u                   #    1.03  insn per cycle            
+           845,382      cycles:u                                                              
+
+       0.005195757 seconds time elapsed
+
+       0.000000000 seconds user
+       0.005005000 seconds sys
+
+
