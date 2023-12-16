@@ -42,8 +42,9 @@ impl GA {
 
     pub fn evolve(&mut self) -> (Params, f64) {
         for i in 0..NUMBER_OF_GENERATIONS {
-            // Evaluate all members of the population
-            self.evaluate();
+            if i == 0 {
+                self.evaluate();
+            }
 
             // Perform tournament selection
             self.tournament_selection();
@@ -54,13 +55,16 @@ impl GA {
             // Perform mutation
             self.mutate();
 
+            // Evaluate all members of the population
+            self.evaluate();
+
             // Prune the population to get it back to max capacity
             self.prune();
 
-            println!("Generation: {}", i);
-            println!("    File Size: {}", self.max_buffer_size);
-            println!("    Average Fitness: {}", self.get_average_fitness());
-            println!("    Current Best: {:?}", self.get_best_individual().0);
+            println!("    Generation: {}", i);
+            println!("        File Size: {}", self.max_buffer_size);
+            println!("        Average Fitness: {}", self.get_average_fitness());
+            println!("        Current Best: {:?}", self.get_best_individual().0);
         }
 
         return self.get_best_individual();
@@ -194,6 +198,8 @@ impl GA {
             panic!();
         }
 
+        winners.push(self.current_best.clone());
+
         // Perform tournament selection on each batch and add the winner to the winners vector
         for i in 0..number_of_winners {
             let winner_index = if rng.gen::<f32>() > SELECTION_PRESSURE {
@@ -213,6 +219,10 @@ impl GA {
                 fittest_index
             };
 
+            if self.population[winner_index].0.threads == self.current_best.0.threads && self.population[winner_index].0.buffer_size == self.current_best.0.buffer_size {
+                continue;
+            }
+
             winners.push(self.population[winner_index].clone())
         }
 
@@ -222,65 +232,84 @@ impl GA {
     fn crossover(&mut self) {
         let mut rng = rand::thread_rng();
         let mut new_population: Vec<(Params, f64)> = Vec::new();
+        let total_fitness: f64 = self.population.iter().map(|x| x.1).sum();
 
-        for i in 0..self.population.len() {
+        new_population.push(self.current_best.clone());
+    
+        for _ in 0..self.population.len() {
             if rng.gen::<f32>() < CROSSOVER_RATE {
-                // No crossover is performed and this individual remains in the popuation
-                new_population.push(self.population[i].clone());
+                let index = rng.gen_range(0..self.population.len());
+
+                if self.population[index].0.threads == self.current_best.0.threads && self.population[index].0.buffer_size == self.current_best.0.buffer_size {
+                    continue;
+                }
+
+                new_population.push(self.population[index].clone());
             } else {
-                // Select random parent to crossover with
-                let mate_index = rng.gen_range(0..self.population.len());
-                let mate = self.population[mate_index];
+                let mate1 = self.roulette_wheel_selection(&self.population, total_fitness, &mut rng);
+                let mate2 = self.roulette_wheel_selection(&self.population, total_fitness, &mut rng);
+    
+                let child1_threads = mate1.threads.min(self.max_threads);
+                let child1_buffer_size = mate2.buffer_size.min(self.max_buffer_size);
+                let child1 = Params { threads: child1_threads, buffer_size: child1_buffer_size };
 
-                let child1 = Params { threads: self.population[i].0.threads, buffer_size: mate.0.buffer_size };
-                let child2 = Params { threads: mate.0.threads, buffer_size: self.population[i].0.buffer_size };
-                
-                let mut average_threads = ((self.population[i].0.threads as f32 + mate.0.threads as f32) / 2.0).ceil() as usize;
-                let mut average_buffer_size = ((self.population[i].0.buffer_size as f32 + mate.0.buffer_size as f32) / 2.0).ceil() as usize;
-
-                average_threads = average_threads.min(self.max_threads).max(1);
-                average_buffer_size = average_buffer_size.min(self.max_buffer_size).max(1);
-
-                let child3 = Params { threads: average_threads, buffer_size: average_buffer_size };
+                let child2_threads = mate2.threads.min(self.max_threads);
+                let child2_buffer_size = mate1.buffer_size.min(self.max_buffer_size);
+                let child2 = Params { threads: child2_threads, buffer_size: child2_buffer_size };
 
                 new_population.push((child1, 0.0));
                 new_population.push((child2, 0.0));
-                new_population.push((child3, 0.0));
             }
         }
-
+    
         self.population = new_population;
     }
-
+    
+    
+    fn roulette_wheel_selection(&self, population: &Vec<(Params, f64)>, total_fitness: f64, rng: &mut rand::rngs::ThreadRng) -> Params {
+        let mut slice = rng.gen::<f64>() * total_fitness;
+        let mut cumulative = 0.0;
+        for individual in population {
+            cumulative += individual.1;
+            if cumulative >= slice {
+                return individual.0;  // Return a copy of Params
+            }
+        }
+        population.last().unwrap().0  // Return a copy of Params
+    }
     fn mutate(&mut self) {
         let mut rng = rand::thread_rng();
         
         for i in 0..self.population.len() {
             if rng.gen::<f32>() < MUTATION_RATE {
+                if self.population[i].0.threads == self.current_best.0.threads && self.population[i].0.buffer_size == self.current_best.0.buffer_size {
+                    continue;
+                }
+
                 let mut current_threads = self.population[i].0.threads;
                 let mut current_buffer_size = self.population[i].0.buffer_size;
                 let choice = rng.gen::<f32>();
-
+    
                 if choice < 0.25 {
-                    current_threads = (current_threads + 1).min(self.max_threads);
-                } else if choice >= 0.25 && choice < 0.50 && current_threads > 0 {
-                    current_threads = current_threads - 1;
+                    current_threads = current_threads.saturating_add(1).min(self.max_threads);
+                } else if choice >= 0.25 && choice < 0.50 {
+                    current_threads = current_threads.saturating_sub(1).max(1);
                 } else if choice >= 0.50 && choice < 0.75 {
-                    let ratio = rng.gen_range(0.1..=0.5);
+                    let ratio = rng.gen_range(0.1..=0.8);
                     let change = (ratio * current_buffer_size as f32).ceil() as usize;
-                    current_buffer_size = (current_buffer_size + change).min(self.max_buffer_size);
+                    current_buffer_size = current_buffer_size.saturating_add(change).min(self.max_buffer_size);
                 } else {
-                    let ratio = rng.gen_range(0.1..=0.2);
+                    let ratio = rng.gen_range(0.1..=0.8);
                     let change = (ratio * current_buffer_size as f32).ceil() as usize;
-                    current_buffer_size = (current_buffer_size - change).max(1);
+                    current_buffer_size = current_buffer_size.saturating_sub(change).max(1);
                 }
-
+    
                 self.population[i].0.threads = current_threads;
                 self.population[i].0.buffer_size = current_buffer_size;
             }
         }
     }
-
+    
     fn get_queue(&self, number_of_winners: usize, population_size: usize) -> Vec<Vec<(Params, f64)>> {
         let batch_size = population_size / number_of_winners;
         let remainder = population_size % number_of_winners;
@@ -341,48 +370,52 @@ impl GA {
         singlethread_time_elapsed: f64
     ) -> f64 {
         // Calculate resource efficiency
-        let cache_hits = cache_references as f64 - cache_misses as f64;
         let resource_efficiency = if cache_references > 0 {
-            cache_hits / cache_references as f64
+            (cache_references as f64 - cache_misses as f64) / cache_references as f64
         } else {
             0.0
         };
-
+    
         // Calculate parallelization efficiency
         let speedup = singlethread_time_elapsed / time_elapsed;
         let parallelization_efficiency = speedup / num_of_threads as f64;
-
-        // Normalize the metrics using logarithmic scaling
-        let normalized_time = 1.0 / time_elapsed; // Inverted time for normalization
-        let normalized_resource_efficiency = (resource_efficiency + 1.0).log2(); // Avoid negative values
-        let normalized_parallelization_efficiency = (parallelization_efficiency + 1.0).log2(); // Avoid negative values
-
+    
+        // Normalize the metrics
+        let normalized_time = 1.0 / (1.0 + time_elapsed); // Normalize to a range of 0 to 1
+        let normalized_resource_efficiency = resource_efficiency; // Already between 0 and 1
+        let normalized_parallelization_efficiency = 1.0 / (1.0 + (1.0 / parallelization_efficiency)); // Normalize to a range of 0 to 1
+    
         // Weighted Sum
-        const WEIGHT_TIME: f64 = 0.6; // Highest weight for execution time
-        const WEIGHT_PARALLELIZATION: f64 = 0.3;
-        const WEIGHT_RESOURCE: f64 = 0.1;
-
+        const WEIGHT_TIME: f64 = 0.2;
+        const WEIGHT_PARALLELIZATION: f64 = 0.5;
+        const WEIGHT_RESOURCE: f64 = 0.2;
+    
         let fitness = WEIGHT_TIME * normalized_time 
-        + WEIGHT_PARALLELIZATION * normalized_parallelization_efficiency 
-        + WEIGHT_RESOURCE * normalized_resource_efficiency;
-
-        return fitness;
+            + WEIGHT_PARALLELIZATION * normalized_parallelization_efficiency 
+            + WEIGHT_RESOURCE * normalized_resource_efficiency;
+    
+        fitness.min(1.0).max(0.0) // Ensure fitness is within 0 to 1
     }
+    
 
-    fn get_average_fitness(&mut self) -> f64 {
-        if self.population.len() == 0 {
+    fn get_average_fitness(&self) -> f64 {
+        let population_size = self.population.len();
+        if population_size == 0 {
             return 0.0;
         }
-
-        let population_size = self.population.len();
-        let mut fitness_sum = 0.0;
-        for i in 0..population_size {
-            if self.population[i].1.is_infinite() {
-                self.population[i].1 = 0.0;
-            }
-            fitness_sum += self.population[i].1;
-        }
-
+    
+        let fitness_sum: f64 = self.population.iter()
+            .map(|(_, fitness)| {
+                if fitness.is_infinite() {
+                    1.0
+                } else {
+                    *fitness
+                }
+            })
+            .sum();
+    
         fitness_sum / population_size as f64
     }
+    
+    
 }

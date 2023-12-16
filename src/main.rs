@@ -103,14 +103,17 @@ fn main() -> io::Result<()> {
     let mut optimal_params: HashMap<FileSizeRange, ParamsAndFitness> = initialize_ranges();
     let test_file_paths = load_test_files();
 
-    //while!all_ranges_optimized(&optimal_params) {
-    for i in 0..10 {
-        //print_optimal_params(&optimal_params);
-        let file_path = select_random_file(&test_file_paths);
+    let num_files = test_file_paths.len();
+
+    for i in 0..21 {
+        println!("Round: {}", i);
+        // Get the file in order, wrapping around if i exceeds the number of files
+        let file_index = i % num_files;
+        let file_path = &test_file_paths[file_index];
         let file_size = get_file_size(&file_path);
         let file_range = identify_range(&optimal_params, file_size);
 
-        let mut g = GA::new(file_path, file_size);
+        let mut g = GA::new(file_path.clone(), file_size);
         let best_configs = g.evolve();
 
         if best_configs.1 > optimal_params.get(&file_range).unwrap().fitness {
@@ -123,10 +126,9 @@ fn main() -> io::Result<()> {
     for (range, params_fitness) in &optimal_params {
         writeln!(
             file,
-            "Range: {}-{}, Threads: {}, Buffer Size: {}, Fitness: {}",
+            "{},{},{},{}",
             range.min_size, range.max_size,
             params_fitness.params.threads, params_fitness.params.buffer_size,
-            params_fitness.fitness
         )?;
     }
 

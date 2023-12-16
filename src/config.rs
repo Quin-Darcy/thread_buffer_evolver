@@ -1,4 +1,4 @@
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Params {
     pub threads: usize,
     pub buffer_size: usize,
@@ -10,7 +10,7 @@ pub struct FileSizeRange {
     pub max_size: usize,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct ParamsAndFitness {
     pub params: Params,
     pub fitness: f64,

@@ -1,7 +1,7 @@
-pub const NUMBER_OF_GENERATIONS: usize = 10;
+pub const NUMBER_OF_GENERATIONS: usize = 500;
 pub const MIN_FITNESS_THRESHOLD: f64 = 1000.0;
-pub const INITIAL_POPULATION_SIZE: usize = 100;
-pub const TOURNAMENT_WINNERS_PERCENTAGE: f32 = 0.78;
-pub const SELECTION_PRESSURE: f32 = 0.8;
-pub const CROSSOVER_RATE: f32 = 0.78;
-pub const MUTATION_RATE: f32 = 0.3;
+pub const INITIAL_POPULATION_SIZE: usize = 300;
+pub const TOURNAMENT_WINNERS_PERCENTAGE: f32 = 0.50;
+pub const SELECTION_PRESSURE: f32 = 0.87;
+pub const CROSSOVER_RATE: f32 = 0.82;
+pub const MUTATION_RATE: f32 = 0.31;
